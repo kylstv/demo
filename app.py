@@ -20,7 +20,16 @@ from db import get_db, query
 
 load_dotenv()
 
+import os
+from flask import Flask, render_template
+
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-me")
+
+@app.route("/")
+def home():
+    return "Hello, Railway is running your Flask app!"
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 3000))
     app.run(host="0.0.0.0", port=port)
