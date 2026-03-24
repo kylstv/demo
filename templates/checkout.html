@@ -1,0 +1,608 @@
+{% extends "base.html" %}
+{% block title %}Checkout{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.paypal.com/sdk/js?client-id={{ paypal_client_id }}&currency=PHP"></script>
+<style>
+  /* ── Reset & Tokens ───────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:          #F5F7FA;
+    --surface:     #FFFFFF;
+    --border:      #E4E9F0;
+    --text:        #111827;
+    --muted:       #6B7280;
+    --accent:      #0B6EFD;
+
+    --gcash-blue:  #007DFF;
+    --gcash-dark:  #005AC1;
+    --gcash-light: #EBF3FF;
+
+    --paypal-gold: #FFC439;
+    --paypal-dark: #003087;
+    --paypal-light:#FFF8E7;
+
+    --success:     #16A34A;
+    --danger:      #DC2626;
+    --radius-sm:   8px;
+    --radius:      14px;
+    --radius-lg:   20px;
+    --shadow:      0 4px 24px rgba(0,0,0,.07);
+    --shadow-lg:   0 12px 40px rgba(0,0,0,.12);
+    --font:        'Plus Jakarta Sans', sans-serif;
+  }
+
+  body { font-family: var(--font); background: var(--bg); color: var(--text); }
+
+  /* ── Page ─────────────────────────────────────────────── */
+  .co-section { padding: 48px 20px 80px; }
+  .co-container { max-width: 900px; margin: 0 auto; }
+
+  .co-header { margin-bottom: 32px; }
+  .co-header h2 {
+    font-size: 1.75rem; font-weight: 700; letter-spacing: -.5px;
+  }
+  .co-header p { color: var(--muted); margin-top: 4px; font-size: .92rem; }
+
+  .co-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 768px) {
+    .co-grid { grid-template-columns: 1fr; }
+  }
+
+  /* ── Cards ─────────────────────────────────────────────── */
+  .co-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    box-shadow: var(--shadow);
+  }
+  .co-card-title {
+    font-size: 1rem; font-weight: 700;
+    margin-bottom: 20px; letter-spacing: -.2px;
+  }
+
+  /* ── Order Table ───────────────────────────────────────── */
+  .order-table { width: 100%; border-collapse: collapse; }
+  .order-table thead th {
+    font-size: .75rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--muted);
+    padding: 0 0 12px; text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .order-table thead th:last-child { text-align: right; }
+  .order-table tbody td {
+    padding: 14px 0; border-bottom: 1px solid var(--border);
+    font-size: .9rem; vertical-align: middle;
+  }
+  .order-table tbody td:last-child { text-align: right; font-weight: 600; }
+  .order-table tbody td:nth-child(2) { text-align: center; color: var(--muted); }
+  .order-table .item-name { font-weight: 600; }
+  .order-table .item-price { font-size: .78rem; color: var(--muted); margin-top: 2px; }
+  .order-table .total-row td {
+    border-bottom: none; padding-top: 18px; font-weight: 700;
+    font-size: 1rem; color: var(--text);
+  }
+
+  /* ── Payment Panel ─────────────────────────────────────── */
+  .payment-sticky { position: sticky; top: 80px; }
+
+  .amount-badge {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 24px;
+  }
+  .amount-badge span:first-child { font-size: .82rem; color: var(--muted); }
+  .amount-badge .amount-value { font-size: 1.25rem; font-weight: 700; }
+
+  /* ── Method Tabs ───────────────────────────────────────── */
+  .method-tabs {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 10px; margin-bottom: 22px;
+  }
+  .method-tab {
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 12px;
+    cursor: pointer; text-align: center;
+    transition: all .18s ease;
+    background: var(--surface);
+    user-select: none;
+  }
+  .method-tab:hover { border-color: var(--accent); }
+  .method-tab.active-gcash {
+    border-color: var(--gcash-blue);
+    background: var(--gcash-light);
+  }
+  .method-tab.active-paypal {
+    border-color: var(--paypal-gold);
+    background: var(--paypal-light);
+  }
+  .method-tab .tab-icon { font-size: 1.5rem; margin-bottom: 4px; display: block; }
+  .method-tab .tab-label { font-size: .78rem; font-weight: 600; color: var(--muted); }
+  .method-tab.active-gcash .tab-label { color: var(--gcash-dark); }
+  .method-tab.active-paypal .tab-label { color: var(--paypal-dark); }
+
+  /* ── Payment Panels ────────────────────────────────────── */
+  .pay-panel { display: none; animation: fadeUp .22s ease; }
+  .pay-panel.visible { display: block; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* GCash Panel */
+  .gcash-panel {
+    background: linear-gradient(135deg, #007DFF 0%, #0056CC 100%);
+    border-radius: var(--radius);
+    padding: 22px;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .gcash-logo {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 16px;
+  }
+  .gcash-logo-icon {
+    width: 40px; height: 40px; background: #fff;
+    border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem; font-weight: 900; color: var(--gcash-blue);
+  }
+  .gcash-logo-text { font-size: 1.2rem; font-weight: 700; letter-spacing: -.3px; }
+  .gcash-logo-sub { font-size: .72rem; opacity: .75; }
+
+  .gcash-form { display: flex; flex-direction: column; gap: 12px; }
+  .gcash-input-wrap { position: relative; }
+  .gcash-input-wrap .prefix {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    font-size: .85rem; opacity: .7; font-weight: 600;
+  }
+  .gcash-input {
+    width: 100%; padding: 11px 12px 11px 32px;
+    border: 1.5px solid rgba(255,255,255,.3);
+    border-radius: var(--radius-sm);
+    background: rgba(255,255,255,.15);
+    color: #fff; font-family: var(--font); font-size: .9rem;
+    outline: none; transition: border-color .15s;
+  }
+  .gcash-input::placeholder { color: rgba(255,255,255,.55); }
+  .gcash-input:focus { border-color: rgba(255,255,255,.7); background: rgba(255,255,255,.22); }
+
+  .gcash-btn {
+    width: 100%; padding: 13px;
+    background: #fff; color: var(--gcash-blue);
+    border: none; border-radius: var(--radius-sm);
+    font-family: var(--font); font-size: .95rem; font-weight: 700;
+    cursor: pointer; transition: transform .12s, box-shadow .12s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-top: 4px;
+  }
+  .gcash-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,.18); }
+  .gcash-btn:active { transform: translateY(0); }
+  .gcash-btn:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+
+  .gcash-note {
+    font-size: .73rem; opacity: .7; text-align: center; margin-top: 10px; line-height: 1.4;
+  }
+
+  /* PayPal Panel */
+  #paypal-button-container { min-height: 50px; }
+
+  /* ── Security note ─────────────────────────────────────── */
+  .security-note {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-size: .78rem; color: var(--muted);
+    margin-top: 16px;
+  }
+  .security-note i { color: var(--success); flex-shrink: 0; }
+
+  /* ── Status messages ───────────────────────────────────── */
+  #payment-status { margin-top: 14px; }
+  .alert {
+    border-radius: var(--radius-sm); padding: 12px 16px;
+    font-size: .85rem; font-weight: 500;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .alert-info    { background: #EFF6FF; color: #1D4ED8; border: 1px solid #BFDBFE; }
+  .alert-success { background: #F0FDF4; color: #166534; border: 1px solid #BBF7D0; }
+  .alert-danger  { background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; }
+
+  .spinner {
+    width: 14px; height: 14px; border: 2px solid currentColor;
+    border-top-color: transparent; border-radius: 50%;
+    animation: spin .7s linear infinite; flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── OTP Modal ─────────────────────────────────────────── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.5);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000; opacity: 0; pointer-events: none;
+    transition: opacity .2s;
+  }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal-box {
+    background: var(--surface); border-radius: var(--radius-lg);
+    padding: 32px; width: 320px; max-width: 90vw;
+    box-shadow: var(--shadow-lg);
+    transform: scale(.95); transition: transform .2s;
+  }
+  .modal-overlay.open .modal-box { transform: scale(1); }
+  .modal-box h4 { font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+  .modal-box p  { font-size: .82rem; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
+  .otp-inputs { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
+  .otp-digit {
+    width: 44px; height: 52px; text-align: center; font-size: 1.4rem; font-weight: 700;
+    border: 2px solid var(--border); border-radius: var(--radius-sm);
+    font-family: var(--font); outline: none; transition: border-color .15s;
+  }
+  .otp-digit:focus { border-color: var(--gcash-blue); }
+  .otp-verify-btn {
+    width: 100%; padding: 12px;
+    background: var(--gcash-blue); color: #fff;
+    border: none; border-radius: var(--radius-sm);
+    font-family: var(--font); font-size: .95rem; font-weight: 700;
+    cursor: pointer; transition: background .15s;
+  }
+  .otp-verify-btn:hover { background: var(--gcash-dark); }
+  .otp-cancel {
+    width: 100%; padding: 10px; background: none; border: none;
+    color: var(--muted); font-family: var(--font); font-size: .82rem;
+    cursor: pointer; margin-top: 8px;
+  }
+  .otp-cancel:hover { color: var(--text); }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="co-section">
+  <div class="co-container">
+
+    <div class="co-header">
+      <h2>Checkout</h2>
+      <p>Review your order and complete payment below.</p>
+    </div>
+
+    <div class="co-grid">
+
+      <!-- ── Order Summary ── -->
+      <div class="co-card">
+        <div class="co-card-title">Order Summary</div>
+        <table class="order-table">
+          <thead>
+            <tr>
+              <th>Product</th>
+              <th style="text-align:center;">Qty</th>
+              <th style="text-align:right;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+            <tr>
+              <td>
+                <div class="item-name">{{ item.name }}</div>
+                <div class="item-price">₱{{ "%.2f"|format(item.price) }} each</div>
+              </td>
+              <td style="text-align:center;">{{ item.qty }}</td>
+              <td>₱{{ "%.2f"|format(item.subtotal) }}</td>
+            </tr>
+            {% endfor %}
+            <tr class="total-row">
+              <td colspan="2">Total</td>
+              <td>₱{{ "%.2f"|format(total) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ── Payment Panel ── -->
+      <div class="co-card payment-sticky">
+        <div class="co-card-title">Payment</div>
+
+        <div class="amount-badge">
+          <span>Amount due</span>
+          <span class="amount-value">₱{{ "%.2f"|format(total) }}</span>
+        </div>
+
+        <!-- Method Tabs -->
+        <div class="method-tabs">
+          <div class="method-tab active-gcash" id="tab-gcash" onclick="switchMethod('gcash')">
+            <span class="tab-icon">💙</span>
+            <span class="tab-label">GCash</span>
+          </div>
+          <div class="method-tab" id="tab-paypal" onclick="switchMethod('paypal')">
+            <span class="tab-icon">🅿️</span>
+            <span class="tab-label">PayPal</span>
+          </div>
+        </div>
+
+        <!-- GCash Panel -->
+        <div class="pay-panel visible" id="panel-gcash">
+          <div class="gcash-panel">
+            <div class="gcash-logo">
+              <div class="gcash-logo-icon">G</div>
+              <div>
+                <div class="gcash-logo-text">GCash</div>
+                <div class="gcash-logo-sub">Scan or enter your number</div>
+              </div>
+            </div>
+
+            <div class="gcash-form">
+              <div class="gcash-input-wrap">
+                <span class="prefix">+63</span>
+                <input
+                  class="gcash-input"
+                  id="gcash-number"
+                  type="tel"
+                  maxlength="10"
+                  pattern="[0-9]{10}"
+                  placeholder="9XX XXX XXXX"
+                  inputmode="numeric"
+                >
+              </div>
+
+              <button class="gcash-btn" id="gcash-pay-btn" onclick="initiateGCash()">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                Pay ₱{{ "%.2f"|format(total) }} via GCash
+              </button>
+            </div>
+
+            <div class="gcash-note">
+              You'll receive an OTP on your GCash-registered number to confirm payment.
+            </div>
+          </div>
+        </div>
+
+        <!-- PayPal Panel -->
+        <div class="pay-panel" id="panel-paypal">
+          <div id="paypal-button-container"></div>
+        </div>
+
+        <div id="payment-status" style="display:none;"></div>
+
+        <div class="security-note">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          256-bit SSL encrypted. Your data is never stored.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── OTP Modal ── -->
+<div class="modal-overlay" id="otp-modal">
+  <div class="modal-box">
+    <h4>Confirm Payment</h4>
+    <p id="otp-desc">Enter the 6-digit OTP sent to your GCash number to complete the payment.</p>
+    <div class="otp-inputs">
+      <input class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]">
+      <input class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]">
+      <input class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]">
+      <input class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]">
+      <input class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]">
+      <input class="otp-digit" maxlength="1" inputmode="numeric" pattern="[0-9]">
+    </div>
+    <button class="otp-verify-btn" onclick="verifyGCashOTP()">Verify & Pay</button>
+    <button class="otp-cancel" onclick="closeOTPModal()">Cancel</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── Globals ───────────────────────────────────────── */
+const TOTAL = '{{ "%.2f"|format(total) }}';
+
+/* ── Tab switching ─────────────────────────────────── */
+function switchMethod(method) {
+  ['gcash','paypal'].forEach(m => {
+    document.getElementById('tab-' + m).className    = 'method-tab';
+    document.getElementById('panel-' + m).className  = 'pay-panel';
+  });
+  document.getElementById('tab-'   + method).classList.add('active-' + method);
+  document.getElementById('panel-' + method).classList.add('visible');
+  hideStatus();
+}
+
+/* ── Status helpers ────────────────────────────────── */
+function showStatus(type, html) {
+  const el = document.getElementById('payment-status');
+  el.style.display = 'block';
+  el.innerHTML = `<div class="alert alert-${type}">${html}</div>`;
+}
+function hideStatus() {
+  const el = document.getElementById('payment-status');
+  el.style.display = 'none';
+  el.innerHTML = '';
+}
+
+/* ══════════════════════════════════════════════════════
+   GCASH FLOW
+   ══════════════════════════════════════════════════════ */
+function initiateGCash() {
+  const raw    = document.getElementById('gcash-number').value.replace(/\s/g,'');
+  const number = raw.startsWith('0') ? raw.slice(1) : raw;
+
+  if (!/^9\d{9}$/.test(number)) {
+    showStatus('danger',
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Please enter a valid Philippine mobile number (e.g. 9171234567).'
+    );
+    return;
+  }
+
+  const btn = document.getElementById('gcash-pay-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Sending OTP…';
+
+  // POST to your backend to create a GCash payment intent & trigger OTP
+  fetch('/checkout/gcash/initiate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken') },
+    body: JSON.stringify({ mobile: '+63' + number, amount: TOTAL })
+  })
+  .then(r => r.json())
+  .then(res => {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg> Pay ₱${TOTAL} via GCash`;
+
+    if (res.success) {
+      // Store ref so we can submit it with OTP
+      window._gcashRef = res.reference;
+      document.getElementById('otp-desc').textContent =
+        `Enter the 6-digit OTP sent to +63 ${number} to authorise ₱${TOTAL}.`;
+      openOTPModal();
+    } else {
+      showStatus('danger',
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> ' +
+        (res.message || 'Could not initiate GCash payment. Please try again.')
+      );
+    }
+  })
+  .catch(() => {
+    btn.disabled = false;
+    btn.innerHTML = `Pay ₱${TOTAL} via GCash`;
+    showStatus('danger', 'Network error. Please check your connection and try again.');
+  });
+}
+
+/* ── OTP modal ────────────────────────────────────── */
+function openOTPModal() {
+  document.querySelectorAll('.otp-digit').forEach(i => i.value = '');
+  document.getElementById('otp-modal').classList.add('open');
+  document.querySelector('.otp-digit').focus();
+}
+function closeOTPModal() {
+  document.getElementById('otp-modal').classList.remove('open');
+}
+
+// Auto-advance OTP digits
+document.querySelectorAll('.otp-digit').forEach((input, idx, all) => {
+  input.addEventListener('input', e => {
+    e.target.value = e.target.value.replace(/\D/g,'').slice(-1);
+    if (e.target.value && idx < all.length - 1) all[idx + 1].focus();
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Backspace' && !e.target.value && idx > 0) all[idx - 1].focus();
+  });
+  input.addEventListener('paste', e => {
+    e.preventDefault();
+    const pasted = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g,'');
+    [...pasted].slice(0,6).forEach((ch, i) => { if (all[i]) all[i].value = ch; });
+    const next = Math.min(pasted.length, 5);
+    all[next].focus();
+  });
+});
+
+function verifyGCashOTP() {
+  const otp = [...document.querySelectorAll('.otp-digit')].map(i => i.value).join('');
+  if (otp.length < 6) {
+    alert('Please enter the complete 6-digit OTP.');
+    return;
+  }
+
+  const verifyBtn = document.querySelector('.otp-verify-btn');
+  verifyBtn.disabled = true;
+  verifyBtn.textContent = 'Verifying…';
+
+  fetch('/checkout/gcash/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken') },
+    body: JSON.stringify({ otp, reference: window._gcashRef })
+  })
+  .then(r => r.json())
+  .then(res => {
+    verifyBtn.disabled = false;
+    verifyBtn.textContent = 'Verify & Pay';
+    closeOTPModal();
+
+    if (res.success) {
+      showStatus('info',
+        '<span class="spinner"></span> Processing your order…'
+      );
+      window.location.href = '/order/' + res.order_id + '/success';
+    } else {
+      showStatus('danger',
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> ' +
+        (res.message || 'OTP verification failed. Please try again.')
+      );
+    }
+  })
+  .catch(() => {
+    verifyBtn.disabled = false;
+    verifyBtn.textContent = 'Verify & Pay';
+    closeOTPModal();
+    showStatus('danger', 'Network error during OTP verification.');
+  });
+}
+
+/* ══════════════════════════════════════════════════════
+   PAYPAL FLOW
+   ══════════════════════════════════════════════════════ */
+paypal.Buttons({
+  style: { layout: 'vertical', color: 'gold', shape: 'rect', label: 'pay' },
+
+  createOrder: function(data, actions) {
+    return actions.order.create({
+      purchase_units: [{
+        amount: { value: TOTAL, currency_code: 'PHP' }
+      }]
+    });
+  },
+
+  onApprove: function(data, actions) {
+    return actions.order.capture().then(function(details) {
+      showStatus('info', '<span class="spinner"></span> Processing your order…');
+
+      fetch('/checkout/capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken') },
+        body: JSON.stringify({ orderID: data.orderID })
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          window.location.href = '/order/' + res.order_id + '/success';
+        } else {
+          showStatus('danger',
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Payment captured but order creation failed. Please contact support.'
+          );
+        }
+      })
+      .catch(() => showStatus('danger', 'Network error after payment capture.'));
+    });
+  },
+
+  onError: function(err) {
+    showStatus('danger',
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> PayPal payment failed. Please try again or use GCash.'
+    );
+    console.error('[PayPal]', err);
+  }
+}).render('#paypal-button-container');
+
+/* ── CSRF helper (Django / Flask-WTF) ─────────────── */
+function getCookie(name) {
+  const m = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+  return m ? decodeURIComponent(m.pop()) : '';
+}
+</script>
+{% endblock %}

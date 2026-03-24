@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Log In{% endblock %}
+{% block content %}
+<div class="form-card">
+  <h2>Welcome Back</h2>
+  <p class="sub">Sign in to your account to continue shopping.</p>
+
+  <form method="POST" action="{{ url_for('login') }}">
+    <div class="form-group">
+      <label for="email">Email Address</label>
+      <input type="email" id="email" name="email" class="form-control" placeholder="you@example.com" required autofocus>
+    </div>
+    <div class="form-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" class="form-control" placeholder="••••••••" required>
+    </div>
+    <div style="text-align:right;margin-bottom:20px;">
+      <a href="{{ url_for('forgot_password') }}" style="color:var(--gold);font-size:.85rem;">Forgot password?</a>
+    </div>
+    <button type="submit" class="btn btn-primary btn-block">
+      <i class="fas fa-sign-in-alt"></i> Log In
+    </button>
+  </form>
+  <p style="text-align:center;margin-top:20px;font-size:.88rem;color:var(--gray-500);">
+    Don't have an account? <a href="{{ url_for('register') }}" style="color:var(--gold);font-weight:600;">Register here</a>
+  </p>
+</div>
+{% endblock %}
