@@ -25,7 +25,7 @@ load_dotenv()
 # FIX 1: Single Flask app instance — removed the duplicate bare `app = Flask(__name__)`
 #         and the fake `home()` route that was shadowing the real one.
 
-app = Flask(__name__)
+web_app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret-change-me")
 app.config["UPLOAD_FOLDER"] = os.path.join("static", "images", "products")
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5 MB
