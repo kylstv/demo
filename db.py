@@ -8,7 +8,7 @@ load_dotenv()
 def get_db():
     """Return a new PostgreSQL connection."""
     return psycopg2.connect(
-        host=os.getenv("DB_HOST", "lcontainers-us-west-123.railway.app"),
+        host=os.getenv("DB_HOST", "containers-us-west-123.railway.app"),
         port=os.getenv("DB_PORT", 5432),
         dbname=os.getenv("DB_NAME", "claude"),
         user=os.getenv("DB_USER", "postgres"),
