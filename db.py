@@ -29,9 +29,9 @@ def get_db():
             return psycopg2.connect(
                 host=os.getenv("DB_HOST", "localhost"),
                 port=os.getenv("DB_PORT", 5432),
-                dbname=os.getenv("DB_NAME", "railway"),
+                dbname=os.getenv("DB_NAME", "claude"),
                 user=os.getenv("DB_USER", "postgres"),
-                password=os.getenv("DB_PASSWORD", "password"),
+                password=os.getenv("DB_PASSWORD", "kyle123"),
                 cursor_factory=psycopg2.extras.RealDictCursor
             )
     except psycopg2.Error as e:
