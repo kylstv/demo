@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Manage Users{% endblock %}
+{% block content %}
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="admin-logo">⬡ MyStore Admin</div>
+    <a href="{{ url_for('admin_dashboard') }}"  class="sidebar-link"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+    <a href="{{ url_for('admin_categories') }}"  class="sidebar-link"><i class="fas fa-tags"></i> Categories</a>
+    <a href="{{ url_for('admin_products') }}"    class="sidebar-link"><i class="fas fa-box"></i> Products</a>
+    <a href="{{ url_for('admin_users') }}"       class="sidebar-link active"><i class="fas fa-users"></i> Users</a>
+    <a href="{{ url_for('admin_orders') }}"      class="sidebar-link"><i class="fas fa-receipt"></i> Orders</a>
+    <a href="{{ url_for('admin_report_pdf') }}"  class="sidebar-link" target="_blank"><i class="fas fa-file-pdf"></i> PDF Report</a>
+    <a href="{{ url_for('home') }}"              class="sidebar-link"><i class="fas fa-store"></i> View Store</a>
+    <a href="{{ url_for('logout') }}"            class="sidebar-link" style="color:#e05252;"><i class="fas fa-sign-out-alt"></i> Logout</a>
+  </aside>
+
+  <div class="admin-main">
+    <h1>Users</h1>
+    <p class="page-desc">View and manage all registered accounts. Deletion requires your admin password.</p>
+
+    <div class="table-card">
+      <div class="table-header">
+        <h3>All Users ({{ users|length }})</h3>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Username</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Verified</th>
+            <th>Joined</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td>{{ u.id }}</td>
+            <td><strong>{{ u.username }}</strong></td>
+            <td>{{ u.email }}</td>
+            <td>
+              {% if u.is_admin %}
+              <span class="status-badge status-paid">Admin</span>
+              {% else %}
+              <span style="font-size:.78rem;color:var(--gray-500);">Customer</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if u.is_verified %}
+              <span style="color:var(--success);font-size:.85rem;"><i class="fas fa-check-circle"></i> Yes</span>
+              {% else %}
+              <span style="color:var(--gray-500);font-size:.85rem;"><i class="fas fa-clock"></i> Pending</span>
+              {% endif %}
+            </td>
+            <td>{{ u.created_at.strftime('%b %d, %Y') }}</td>
+            <td>
+              {% if not u.is_admin %}
+              <!-- Delete modal trigger -->
+              <button class="btn btn-danger btn-sm"
+                      onclick="openDeleteModal({{ u.id }}, '{{ u.username }}')">
+                <i class="fas fa-trash"></i> Delete
+              </button>
+              {% else %}
+              <span style="color:var(--gray-500);font-size:.8rem;">Protected</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-500);">No users found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:2000;align-items:center;justify-content:center;">
+  <div style="background:var(--white);border-radius:var(--radius-lg);padding:36px;max-width:420px;width:90%;box-shadow:var(--shadow-lg);">
+    <h3 style="margin-bottom:8px;"><i class="fas fa-exclamation-triangle" style="color:var(--danger);"></i> Delete User</h3>
+    <p style="color:var(--gray-700);margin-bottom:20px;">
+      You are about to delete <strong id="modalUsername"></strong>. This cannot be undone.<br>
+      Enter your admin password to confirm.
+    </p>
+    <form method="POST" id="deleteForm">
+      <div class="form-group">
+        <label>Admin Password</label>
+        <input type="password" name="confirm_password" class="form-control" placeholder="Your password" required>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button type="submit" class="btn btn-danger">
+          <i class="fas fa-trash"></i> Delete User
+        </button>
+        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openDeleteModal(uid, username) {
+  document.getElementById('modalUsername').textContent = username;
+  document.getElementById('deleteForm').action = '/admin/users/delete/' + uid;
+  const modal = document.getElementById('deleteModal');
+  modal.style.display = 'flex';
+}
+function closeModal() {
+  document.getElementById('deleteModal').style.display = 'none';
+}
+document.getElementById('deleteModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+</script>
+{% endblock %}

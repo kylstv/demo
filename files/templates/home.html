@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-inner">
+    <h1>Shop the <em>Finest</em> Products</h1>
+    <p>Discover our curated collection of premium items across all categories.</p>
+    <div class="hero-actions">
+      <a href="{{ url_for('products') }}" class="btn btn-gold">
+        <i class="fas fa-store"></i> Shop Now
+      </a>
+      <a href="{{ url_for('about') }}" class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.4);">
+        Learn More
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- Categories -->
+{% if categories %}
+<section class="section" style="padding-bottom:0;">
+  <div class="container">
+    <h2 class="section-title">Browse Categories</h2>
+    <p class="section-subtitle">Find exactly what you're looking for.</p>
+    <div class="cat-grid">
+      {% for c in categories %}
+      <a href="{{ url_for('products', category=c.id) }}" class="cat-card">
+        <div class="cat-icon">🏷️</div>
+        <span>{{ c.name }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- Featured Products -->
+<section class="section">
+  <div class="container">
+    <h2 class="section-title">Featured Products</h2>
+    <p class="section-subtitle">Our latest and most popular picks.</p>
+    {% if featured %}
+    <div class="product-grid">
+      {% for p in featured %}
+      <div class="product-card">
+        {% if p.image_path %}
+        <img src="{{ url_for('static', filename=p.image_path) }}" alt="{{ p.name }}" class="product-img">
+        {% else %}
+        <div class="product-img-placeholder"><i class="fas fa-image"></i></div>
+        {% endif %}
+        <div class="product-body">
+          <div class="product-cat">{{ p.category_name or 'Uncategorized' }}</div>
+          <div class="product-name">{{ p.name }}</div>
+          <div class="product-desc">{{ p.description or '' }}</div>
+          <div class="product-footer">
+            <span class="product-price">₱{{ "%.2f"|format(p.price) }}</span>
+            <span class="badge-stock {{ 'badge-in' if p.stock > 0 else 'badge-out' }}">
+              {{ 'In Stock' if p.stock > 0 else 'Out of Stock' }}
+            </span>
+          </div>
+          <a href="{{ url_for('product_detail', pid=p.id) }}" class="btn btn-outline btn-sm" style="margin-top:12px;width:100%;justify-content:center;">
+            View Details
+          </a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="text-align:center;margin-top:36px;">
+      <a href="{{ url_for('products') }}" class="btn btn-primary">
+        <i class="fas fa-th"></i> View All Products
+      </a>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:60px;color:var(--gray-500);">
+      <i class="fas fa-box-open" style="font-size:3rem;margin-bottom:16px;display:block;"></i>
+      <p>No products yet. Check back soon!</p>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Register{% endblock %}
+{% block content %}
+<div class="form-card">
+  <h2>Create Account</h2>
+  <p class="sub">Join MyStore and start shopping today.</p>
+
+  <form method="POST" action="{{ url_for('register') }}">
+    <div class="form-group">
+      <label for="username">Username</label>
+      <input type="text" id="username" name="username" class="form-control" placeholder="johndoe" required autofocus>
+    </div>
+    <div class="form-group">
+      <label for="email">Email Address</label>
+      <input type="email" id="email" name="email" class="form-control" placeholder="you@example.com" required>
+    </div>
+    <div class="form-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" class="form-control" placeholder="Min. 8 characters" required>
+      <div class="form-hint">At least 8 characters.</div>
+    </div>
+
+    <!-- CAPTCHA -->
+    <div class="captcha-box">
+      <i class="fas fa-robot" style="color:var(--gold);font-size:1.3rem;"></i>
+      <span class="captcha-q">{{ captcha_question }}</span>
+      <input type="number" name="captcha" class="form-control" placeholder="Answer" required>
+    </div>
+
+    <button type="submit" class="btn btn-gold btn-block">
+      <i class="fas fa-user-plus"></i> Create Account
+    </button>
+  </form>
+
+  <p style="text-align:center;margin-top:20px;font-size:.88rem;color:var(--gray-500);">
+    Already have an account? <a href="{{ url_for('login') }}" style="color:var(--gold);font-weight:600;">Log in</a>
+  </p>
+</div>
+{% endblock %}

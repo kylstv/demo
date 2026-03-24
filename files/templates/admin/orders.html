@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Orders{% endblock %}
+{% block content %}
+<div class="admin-layout">
+  <aside class="admin-sidebar">
+    <div class="admin-logo">⬡ MyStore Admin</div>
+    <a href="{{ url_for('admin_dashboard') }}"  class="sidebar-link"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+    <a href="{{ url_for('admin_categories') }}"  class="sidebar-link"><i class="fas fa-tags"></i> Categories</a>
+    <a href="{{ url_for('admin_products') }}"    class="sidebar-link"><i class="fas fa-box"></i> Products</a>
+    <a href="{{ url_for('admin_users') }}"       class="sidebar-link"><i class="fas fa-users"></i> Users</a>
+    <a href="{{ url_for('admin_orders') }}"      class="sidebar-link active"><i class="fas fa-receipt"></i> Orders</a>
+    <a href="{{ url_for('admin_report_pdf') }}"  class="sidebar-link" target="_blank"><i class="fas fa-file-pdf"></i> PDF Report</a>
+    <a href="{{ url_for('home') }}"              class="sidebar-link"><i class="fas fa-store"></i> View Store</a>
+    <a href="{{ url_for('logout') }}"            class="sidebar-link" style="color:#e05252;"><i class="fas fa-sign-out-alt"></i> Logout</a>
+  </aside>
+
+  <div class="admin-main">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:8px;">
+      <div>
+        <h1>Orders</h1>
+        <p class="page-desc">All customer transactions and payment records.</p>
+      </div>
+      <a href="{{ url_for('admin_report_pdf') }}" class="btn btn-gold" target="_blank">
+        <i class="fas fa-file-pdf"></i> Export PDF Report
+      </a>
+    </div>
+
+    <!-- Summary -->
+    <div class="stats-grid" style="margin-bottom:24px;">
+      {% set paid_orders = orders | selectattr('status', 'eq', 'paid') | list %}
+      <div class="stat-card">
+        <div class="stat-label">Total Orders</div>
+        <div class="stat-value">{{ orders|length }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Paid</div>
+        <div class="stat-value" style="color:var(--success);">{{ paid_orders|length }}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Revenue</div>
+        <div class="stat-value">₱{{ "%.2f"|format(paid_orders | sum(attribute='total_amount')) }}</div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Order #</th>
+            <th>Customer</th>
+            <th>Email</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th>PayPal ID</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for o in orders %}
+          <tr>
+            <td><strong>#{{ o.id }}</strong></td>
+            <td>{{ o.username }}</td>
+            <td>{{ o.email }}</td>
+            <td><strong>₱{{ "%.2f"|format(o.total_amount) }}</strong></td>
+            <td>
+              <span class="status-badge status-{{ o.status }}">{{ o.status.upper() }}</span>
+            </td>
+            <td style="font-size:.75rem;color:var(--gray-500);max-width:140px;overflow:hidden;text-overflow:ellipsis;">
+              {{ o.paypal_order_id or '—' }}
+            </td>
+            <td>{{ o.created_at.strftime('%b %d, %Y %H:%M') }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-500);">No orders yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
