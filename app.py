@@ -21,6 +21,9 @@ from db import get_db, query
 load_dotenv()
 
 app = Flask(__name__)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 3000))
+    app.run(host="0.0.0.0", port=port)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret-change-me")
 app.config["UPLOAD_FOLDER"] = os.path.join("static", "images", "products")
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024  # 5 MB
