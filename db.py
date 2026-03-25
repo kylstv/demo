@@ -1,60 +1,101 @@
 import os
 import psycopg2
 import psycopg2.extras
+from psycopg2 import pool
 from dotenv import load_dotenv
 
-# Load local .env if it exists
+# Load .env (local only)
 load_dotenv()
 
-def get_db():
-    """Return a new PostgreSQL connection using the Railway URL."""
-    # 1. Get the URL from Railway's environment variables
+# Global connection pool
+connection_pool = None
+
+
+def init_db():
+    """Initialize connection pool (call once on app start)."""
+    global connection_pool
+
     db_url = os.environ.get("DATABASE_URL")
 
-    # 2. Fix for "postgres://" vs "postgresql://"
-    # Modern SQLAlchemy/psycopg2 requires 'postgresql://'
     if db_url and db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)
 
     try:
         if db_url:
-            # Connect using the full string (Production)
-            return psycopg2.connect(
-                db_url, 
-                cursor_factory=psycopg2.extras.RealDictCursor
+            connection_pool = psycopg2.pool.SimpleConnectionPool(
+                minconn=1,
+                maxconn=10,
+                dsn=db_url,
+                sslmode="require",          # ✅ REQUIRED for Railway
+                connect_timeout=10          # ✅ Prevent hanging
             )
         else:
-            # Fallback for Local Development
-            print("⚠️ DATABASE_URL not found, using local variables.")
-            return psycopg2.connect(
+            print("⚠️ Using local database config.")
+            connection_pool = psycopg2.pool.SimpleConnectionPool(
+                minconn=1,
+                maxconn=5,
                 host=os.getenv("DB_HOST", "localhost"),
                 port=os.getenv("DB_PORT", 5432),
                 dbname=os.getenv("DB_NAME", "claude"),
                 user=os.getenv("DB_USER", "postgres"),
-                password=os.getenv("DB_PASSWORD", "kyle123"),
-                cursor_factory=psycopg2.extras.RealDictCursor
+                password=os.getenv("DB_PASSWORD", ""),
+                connect_timeout=10
             )
-    except psycopg2.Error as e:
-        print(f"❌ DATABASE CONNECTION ERROR: {e}")
+
+    except Exception as e:
+        print(f"❌ DB INIT ERROR: {e}")
         raise e
 
-def query(sql, params=(), fetchone=False, fetchall=False, commit=False):
-    """Convenience wrapper for quick queries."""
-    conn = get_db()
+
+def get_conn():
+    """Get connection from pool."""
+    if connection_pool is None:
+        init_db()
+
     try:
-        # Using 'with' handles the cursor cleanup automatically
+        conn = connection_pool.getconn()
+
+        # Ensure connection is alive (Railway sleep fix)
         with conn.cursor() as cur:
-            cur.execute(sql, params)
+            cur.execute("SELECT 1")
+
+        return conn
+
+    except Exception:
+        # Reconnect if broken
+        init_db()
+        return connection_pool.getconn()
+
+
+def release_conn(conn):
+    """Return connection to pool."""
+    if connection_pool:
+        connection_pool.putconn(conn)
+
+
+def query(sql, params=None, fetchone=False, fetchall=False, commit=False):
+    """Production-safe query helper."""
+    conn = get_conn()
+
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, params or ())
+
             if commit:
                 conn.commit()
                 return cur.rowcount
+
             if fetchone:
                 return cur.fetchone()
+
             if fetchall:
                 return cur.fetchall()
+
     except Exception as e:
+        conn.rollback()
         print(f"❌ QUERY ERROR: {sql}")
         print(f"Details: {e}")
         raise e
+
     finally:
-        conn.close()
+        release_conn(conn)
