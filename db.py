@@ -9,7 +9,7 @@ connection_pool = None
 def init_db():
     global connection_pool
     # ALWAYS check the Environment Variable first
-    db_url = os.environ.get("DB_URL")
+    db_url = os.environ.get("DATABASE_URL")
 
     if db_url:
         print("✅ Connecting to Remote Railway Database via Environment Variable...")
