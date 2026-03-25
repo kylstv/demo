@@ -7,13 +7,20 @@ from dotenv import load_dotenv
 # Load .env (local only)
 load_dotenv()
 
-# Global connection pool
 connection_pool = None
 
 
+def get_db():
+    """Backward compatibility wrapper"""
+    return get_conn()
+
+
 def init_db():
-    """Initialize connection pool (call once on app start)."""
+    """Initialize connection pool (safe to call multiple times)."""
     global connection_pool
+
+    if connection_pool is not None:
+        return  # جلوگیری duplicate pool (IMPORTANT)
 
     db_url = os.environ.get("DATABASE_URL")
 
@@ -26,8 +33,8 @@ def init_db():
                 minconn=1,
                 maxconn=10,
                 dsn=db_url,
-                sslmode="require",          # ✅ REQUIRED for Railway
-                connect_timeout=10          # ✅ Prevent hanging
+                sslmode="require",
+                connect_timeout=10
             )
         else:
             print("⚠️ Using local database config.")
@@ -42,35 +49,52 @@ def init_db():
                 connect_timeout=10
             )
 
+        print("✅ Database pool initialized")
+
     except Exception as e:
         print(f"❌ DB INIT ERROR: {e}")
         raise e
 
 
 def get_conn():
-    """Get connection from pool."""
+    """Get a healthy connection from pool."""
+    global connection_pool
+
     if connection_pool is None:
         init_db()
 
     try:
         conn = connection_pool.getconn()
 
-        # Ensure connection is alive (Railway sleep fix)
+        # Check if connection is alive
         with conn.cursor() as cur:
             cur.execute("SELECT 1")
 
         return conn
 
-    except Exception:
-        # Reconnect if broken
+    except Exception as e:
+        print("⚠️ Connection stale. Reinitializing pool...", e)
+
+        # HARD RESET pool (important for Railway sleep issues)
+        try:
+            if connection_pool:
+                connection_pool.closeall()
+        except Exception:
+            pass
+
+        connection_pool = None
         init_db()
+
         return connection_pool.getconn()
 
 
 def release_conn(conn):
-    """Return connection to pool."""
-    if connection_pool:
-        connection_pool.putconn(conn)
+    """Return connection to pool safely."""
+    try:
+        if connection_pool and conn:
+            connection_pool.putconn(conn)
+    except Exception:
+        pass  # don't crash app on release
 
 
 def query(sql, params=None, fetchone=False, fetchall=False, commit=False):
@@ -92,7 +116,11 @@ def query(sql, params=None, fetchone=False, fetchall=False, commit=False):
                 return cur.fetchall()
 
     except Exception as e:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
         print(f"❌ QUERY ERROR: {sql}")
         print(f"Details: {e}")
         raise e
