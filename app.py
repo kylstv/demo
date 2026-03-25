@@ -7,6 +7,7 @@ from functools import wraps
 from io import BytesIO
 import random
 
+import psycopg2.extras
 from dotenv import load_dotenv
 from flask import (Flask, render_template, request, redirect, url_for,
                    session, flash, jsonify, send_file, abort)
@@ -17,13 +18,11 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 
-from db import get_db, query
+from db import get_db, release_db, query
 
 load_dotenv()
 
 # ─── App Setup ────────────────────────────────────────────────────────────────
-# FIX 1: Single Flask app instance — removed the duplicate bare `app = Flask(__name__)`
-#         and the fake `home()` route that was shadowing the real one.
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret-change-me")
@@ -56,8 +55,6 @@ def login_required(f):
 
 
 def admin_required(f):
-    # FIX 2: admin_required now redirects unauthenticated users to login
-    #         instead of immediately returning 403.
     @wraps(f)
     def decorated(*args, **kwargs):
         if "user_id" not in session:
@@ -164,7 +161,7 @@ def register():
             conn.rollback()
             flash("Username or email already taken.", "danger")
         finally:
-            conn.close()
+            release_db(conn)
 
     # Generate simple math CAPTCHA
     a, b = random.randint(1, 9), random.randint(1, 9)
@@ -176,7 +173,7 @@ def register():
 def verify_email(token):
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("SELECT id FROM users WHERE verify_token=%s", (token,))
         user = cur.fetchone()
         if not user:
@@ -189,7 +186,7 @@ def verify_email(token):
         conn.commit()
         flash("Email verified! You can now log in.", "success")
     finally:
-        conn.close()
+        release_db(conn)
     return redirect(url_for("login"))
 
 
@@ -200,11 +197,11 @@ def login():
         password = request.form["password"]
         conn = get_db()
         try:
-            cur = conn.cursor()
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             cur.execute("SELECT * FROM users WHERE email=%s", (email,))
             user = cur.fetchone()
         finally:
-            conn.close()
+            release_db(conn)
 
         if user and bcrypt.checkpw(password.encode(), user["password"].encode()):
             if not user["is_verified"] and not user["is_admin"]:
@@ -244,7 +241,7 @@ def forgot_password():
             if cur.rowcount:
                 send_reset_email(email, token)
         finally:
-            conn.close()
+            release_db(conn)
         flash("If that email exists, a reset link has been sent.", "info")
         return redirect(url_for("login"))
     return render_template("forgot_password.html")
@@ -254,7 +251,7 @@ def forgot_password():
 def reset_password(token):
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute(
             "SELECT * FROM users WHERE reset_token=%s AND reset_expires > NOW()",
             (token,)
@@ -277,18 +274,16 @@ def reset_password(token):
             flash("Password reset successful! Please log in.", "success")
             return redirect(url_for("login"))
     finally:
-        conn.close()
+        release_db(conn)
     return render_template("reset_password.html", token=token)
 
 # ─── Public / User Routes ─────────────────────────────────────────────────────
 
 @app.route("/")
 def home():
-    # FIX 1 (continued): This is the ONE real home() — the duplicate at the top
-    # of the original file has been removed entirely.
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("SELECT * FROM categories ORDER BY name")
         categories = cur.fetchall()
         cur.execute("""
@@ -298,7 +293,7 @@ def home():
         """)
         featured = cur.fetchall()
     finally:
-        conn.close()
+        release_db(conn)
     return render_template("home.html", categories=categories, featured=featured)
 
 
@@ -317,7 +312,7 @@ def products():
 
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("SELECT * FROM categories ORDER BY name")
         categories = cur.fetchall()
 
@@ -342,7 +337,7 @@ def products():
         cur.execute(f"SELECT COUNT(*) AS total FROM products p {where}", params)
         total = cur.fetchone()["total"]
     finally:
-        conn.close()
+        release_db(conn)
 
     total_pages = (total + per_page - 1) // per_page
     return render_template("products.html",
@@ -355,7 +350,7 @@ def products():
 def product_detail(pid):
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("""
             SELECT p.*, c.name AS category_name
             FROM products p LEFT JOIN categories c ON p.category_id=c.id
@@ -363,7 +358,7 @@ def product_detail(pid):
         """, (pid,))
         product = cur.fetchone()
     finally:
-        conn.close()
+        release_db(conn)
     if not product:
         abort(404)
     return render_template("product_detail.html", product=product)
@@ -378,7 +373,7 @@ def cart():
     if cart:
         conn = get_db()
         try:
-            cur = conn.cursor()
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             ids = [int(k) for k in cart if k.isdigit()]
             cur.execute("SELECT * FROM products WHERE id = ANY(%s)", (ids,))
             for p in cur.fetchall():
@@ -387,14 +382,13 @@ def cart():
                 total   += subtotal
                 items.append({**p, "qty": qty, "subtotal": subtotal})
         finally:
-            conn.close()
+            release_db(conn)
     return render_template("cart.html", items=items, total=round(total, 2))
 
 
 @app.route("/cart/add/<int:pid>", methods=["POST"])
 @login_required
 def cart_add(pid):
-    # FIX 3: Reject zero or negative quantities before touching the session.
     qty = int(request.form.get("qty", 1))
     if qty < 1:
         flash("Quantity must be at least 1.", "warning")
@@ -430,8 +424,7 @@ def checkout():
     items, total = [], 0
     conn = get_db()
     try:
-        cur = conn.cursor()
-        # FIX 4: Cast cart keys to int before passing to SQL to avoid type errors.
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         ids = [int(k) for k in cart if str(k).isdigit()]
         cur.execute("SELECT * FROM products WHERE id = ANY(%s)", (ids,))
         for p in cur.fetchall():
@@ -440,7 +433,7 @@ def checkout():
             total   += subtotal
             items.append({**p, "qty": qty, "subtotal": subtotal})
     finally:
-        conn.close()
+        release_db(conn)
     return render_template("checkout.html",
                            items=items, total=round(total, 2),
                            paypal_client_id=PAYPAL_CLIENT_ID,
@@ -450,7 +443,6 @@ def checkout():
 @app.route("/checkout/capture", methods=["POST"])
 @login_required
 def checkout_capture():
-    """Called by PayPal JS SDK after approval."""
     data      = request.get_json()
     paypal_id = data.get("orderID")
     cart      = session.get("cart", {})
@@ -459,8 +451,7 @@ def checkout_capture():
 
     conn = get_db()
     try:
-        cur = conn.cursor()
-        # FIX 4 (continued): cast keys to int for the ANY(%s) query.
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         ids = [int(k) for k in cart if str(k).isdigit()]
         cur.execute("SELECT * FROM products WHERE id = ANY(%s)", (ids,))
         prods = {str(p["id"]): p for p in cur.fetchall()}
@@ -498,7 +489,7 @@ def checkout_capture():
         app.logger.error(f"Checkout capture error: {e}")
         return jsonify({"error": str(e)}), 500
     finally:
-        conn.close()
+        release_db(conn)
 
 
 @app.route("/order/<int:oid>/success")
@@ -506,7 +497,7 @@ def checkout_capture():
 def order_success(oid):
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute(
             "SELECT * FROM orders WHERE id=%s AND user_id=%s",
             (oid, session["user_id"])
@@ -521,7 +512,7 @@ def order_success(oid):
         """, (oid,))
         items = cur.fetchall()
     finally:
-        conn.close()
+        release_db(conn)
     return render_template("order_success.html", order=order, items=items)
 
 # ─── Admin Routes ─────────────────────────────────────────────────────────────
@@ -529,11 +520,9 @@ def order_success(oid):
 @app.route("/admin")
 @admin_required
 def admin_dashboard():
-    # NOTE: @admin_required now handles the login check, so @login_required
-    # is not needed here (and is removed to avoid double-redirecting).
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("SELECT COUNT(*) AS c FROM users WHERE is_admin=FALSE")
         total_users = cur.fetchone()["c"]
         cur.execute("SELECT COUNT(*) AS c FROM products")
@@ -555,7 +544,7 @@ def admin_dashboard():
         """)
         cat_data = cur.fetchall()
     finally:
-        conn.close()
+        release_db(conn)
     return render_template("admin/dashboard.html",
                            total_users=total_users,
                            total_products=total_products,
@@ -570,7 +559,7 @@ def admin_dashboard():
 def admin_categories():
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         if request.method == "POST":
             name = request.form["name"].strip()
             desc = request.form.get("description", "").strip()
@@ -588,14 +577,13 @@ def admin_categories():
         cur.execute("SELECT * FROM categories ORDER BY name")
         cats = cur.fetchall()
     finally:
-        conn.close()
+        release_db(conn)
     return render_template("admin/categories.html", categories=cats)
 
 
 @app.route("/admin/categories/delete/<int:cid>", methods=["POST"])
 @admin_required
 def admin_category_delete(cid):
-    # FIX 5: Changed from GET to POST to prevent CSRF via link/prefetch.
     query("DELETE FROM categories WHERE id=%s", (cid,), commit=True)
     flash("Category deleted.", "info")
     return redirect(url_for("admin_categories"))
@@ -606,7 +594,7 @@ def admin_category_delete(cid):
 def admin_products():
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("""
             SELECT p.*, c.name AS category_name
             FROM products p LEFT JOIN categories c ON p.category_id=c.id
@@ -614,7 +602,7 @@ def admin_products():
         """)
         prods = cur.fetchall()
     finally:
-        conn.close()
+        release_db(conn)
     return render_template("admin/products.html", products=prods)
 
 
@@ -623,7 +611,7 @@ def admin_products():
 def admin_product_add():
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("SELECT * FROM categories ORDER BY name")
         cats = cur.fetchall()
         if request.method == "POST":
@@ -645,7 +633,7 @@ def admin_product_add():
             flash("Product added!", "success")
             return redirect(url_for("admin_products"))
     finally:
-        conn.close()
+        release_db(conn)
     return render_template("admin/product_form.html", categories=cats, product=None)
 
 
@@ -654,7 +642,7 @@ def admin_product_add():
 def admin_product_edit(pid):
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("SELECT * FROM products WHERE id=%s", (pid,))
         product = cur.fetchone()
         if not product:
@@ -681,14 +669,13 @@ def admin_product_edit(pid):
             flash("Product updated!", "success")
             return redirect(url_for("admin_products"))
     finally:
-        conn.close()
+        release_db(conn)
     return render_template("admin/product_form.html", categories=cats, product=product)
 
 
 @app.route("/admin/products/delete/<int:pid>", methods=["POST"])
 @admin_required
 def admin_product_delete(pid):
-    # FIX 5 (continued): POST-only delete to prevent CSRF.
     query("DELETE FROM products WHERE id=%s", (pid,), commit=True)
     flash("Product deleted.", "info")
     return redirect(url_for("admin_products"))
@@ -699,14 +686,14 @@ def admin_product_delete(pid):
 def admin_users():
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute(
             "SELECT id,username,email,is_admin,is_verified,created_at "
             "FROM users ORDER BY created_at DESC"
         )
         users = cur.fetchall()
     finally:
-        conn.close()
+        release_db(conn)
     return render_template("admin/users.html", users=users)
 
 
@@ -716,7 +703,7 @@ def admin_user_delete(uid):
     password = request.form.get("confirm_password", "")
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("SELECT password FROM users WHERE id=%s", (session["user_id"],))
         admin = cur.fetchone()
         if not admin or not bcrypt.checkpw(password.encode(), admin["password"].encode()):
@@ -729,7 +716,7 @@ def admin_user_delete(uid):
         conn.commit()
         flash("User deleted.", "info")
     finally:
-        conn.close()
+        release_db(conn)
     return redirect(url_for("admin_users"))
 
 
@@ -738,7 +725,7 @@ def admin_user_delete(uid):
 def admin_orders():
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("""
             SELECT o.*, u.username, u.email
             FROM orders o JOIN users u ON o.user_id=u.id
@@ -746,17 +733,16 @@ def admin_orders():
         """)
         orders = cur.fetchall()
     finally:
-        conn.close()
+        release_db(conn)
     return render_template("admin/orders.html", orders=orders)
 
 
 @app.route("/admin/report/pdf")
 @admin_required
 def admin_report_pdf():
-    """Generate a PDF sales report using ReportLab."""
     conn = get_db()
     try:
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute("""
             SELECT o.id, u.username, u.email, o.total_amount, o.status,
                    o.paypal_order_id, o.created_at
@@ -769,7 +755,7 @@ def admin_report_pdf():
         )
         grand_total = cur.fetchone()["total"]
     finally:
-        conn.close()
+        release_db(conn)
 
     buffer = BytesIO()
     doc    = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30,
@@ -815,7 +801,6 @@ def admin_report_pdf():
 
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────
-# FIX 6: Removed the duplicate `if __name__ == "__main__"` block.
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 3000))
