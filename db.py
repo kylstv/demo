@@ -9,36 +9,44 @@ connection_pool = None
 def init_db():
     global connection_pool
     
-    # Priority 1: Check DATABASE_URL (Railway standard)
-    # Priority 2: Check DB_URL (Your custom name)
-    db_url = os.environ.get("DATABASE_URL") or os.environ.get("DB_URL")
+    # 1. Grab the official Railway variable. 
+    # If this is missing, the app will fail gracefully with a clear message.
+    db_url = os.environ.get("DATABASE_URL")
 
     if not db_url:
-        print("❌ CRITICAL ERROR: No Database URL found in Environment Variables!")
+        print("❌ CRITICAL ERROR: DATABASE_URL not found in Environment Variables!")
+        print("👉 FIX: Go to Railway Dashboard > Flask Service > Variables > Add Reference Secret.")
         return False
 
-    # Fix for SQLAlchemy/Psycopg2 prefix requirements
+    # 2. Log the connection attempt (Masking the password for security)
+    # This helps us confirm if it's still trying to use the old 'crossover.proxy'
+    connection_host = db_url.split('@')[-1] if '@' in db_url else "Unknown"
+    print(f"🔄 Attempting to connect to: {connection_host}")
+
+    # 3. Standardize the prefix (Required for some Psycopg2/SQLAlchemy versions)
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)
 
     try:
-        # Use ThreadedConnectionPool for better stability in web environments
+        # 4. Initialize the Threaded Pool
+        # minconn=1, maxconn=20 allows the app to handle multiple users at once
         connection_pool = psycopg2.pool.ThreadedConnectionPool(
             1, 20, dsn=db_url
         )
-        print("✅ Database Pool Initialized Successfully!")
+        print("✅ DATABASE CONNECTION SUCCESS: Pool initialized.")
         return True
     except Exception as e:
-        print(f"❌ DB INIT ERROR: {e}")
-        connection_pool = None # Ensure it stays None if it fails
+        print(f"❌ DATABASE CONNECTION FAILED: {e}")
+        connection_pool = None
         return False
 
 def get_db():
     global connection_pool
-    # If pool is missing, try to initialize it once
+    # If the pool doesn't exist, try to start it
     if connection_pool is None:
-        if not init_db():
-            raise Exception("Database could not be initialized. Check your Railway Environment Variables.")
+        success = init_db()
+        if not success:
+            raise Exception("Database could not be initialized. Check Railway Variables.")
     
     try:
         return connection_pool.getconn()
@@ -55,10 +63,14 @@ def release_db(conn):
             print(f"❌ Error releasing connection: {e}")
 
 def query(sql, params=(), fetchone=False, fetchall=False, commit=False):
-    """Executes SQL queries and returns results as dictionaries."""
-    conn = get_db()
+    """
+    Utility function to run SQL queries.
+    Returns results as dictionaries (e.g., row['name'] instead of row[0]).
+    """
+    conn = None
     try:
-        # RealDictCursor allows row['column_name'] access
+        conn = get_db()
+        # Using RealDictCursor makes development much easier
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, params)
             
@@ -74,7 +86,6 @@ def query(sql, params=(), fetchone=False, fetchall=False, commit=False):
                 
             return None
     except Exception as e:
-        # If there's a database error, rollback the transaction
         if conn:
             conn.rollback()
         print(f"❌ QUERY ERROR: {e}")
