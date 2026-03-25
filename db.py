@@ -7,23 +7,24 @@ connection_pool = None
 
 def init_db():
     global connection_pool
-    # RAILWAY provides DATABASE_URL automatically in production
+    # ALWAYS check the Environment Variable first
     db_url = os.environ.get("DB_URL")
 
     if db_url:
-        print("✅ Connecting to Remote Railway Database...")
-        # Fix for newer SQLAlchemy/psycopg2 requirements
+        print("✅ Connecting to Remote Railway Database via Environment Variable...")
         if db_url.startswith("postgres://"):
             db_url = db_url.replace("postgres://", "postgresql://", 1)
     else:
-        print("⚠️ DATABASE_URL not found! Falling back to .env fallback...")
-        # Using the specific URL from your .env as the fallback
-        db_url = "postgresql://postgres:szthvcPFInZUFrQYIvLtHShoUOUXWwRC@crossover.proxy.rlwy.net:38276/railway"
+        # If this prints, it means Step 2 below was not done correctly
+        print("❌ CRITICAL ERROR: DATABASE_URL not found in Environment Variables!")
+        return
 
     try:
-        connection_pool = psycopg2.pool.SimpleConnectionPool(
+        # Switching to ThreadedConnectionPool for better stability on Railway
+        connection_pool = psycopg2.pool.ThreadedConnectionPool(
             1, 20, dsn=db_url
         )
+        print("✅ Database Pool Initialized Successfully!")
     except Exception as e:
         print(f"❌ DB INIT ERROR: {e}")
         raise e
