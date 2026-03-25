@@ -8,36 +8,24 @@ connection_pool = None
 
 def init_db():
     global connection_pool
-    
-    # 1. Grab the official Railway variable. 
-    # If this is missing, the app will fail gracefully with a clear message.
+    # This grabs the internal ${{Postgres.DATABASE_URL}} you just set
     db_url = os.environ.get("DATABASE_URL")
 
     if not db_url:
-        print("❌ CRITICAL ERROR: DATABASE_URL not found in Environment Variables!")
-        print("👉 FIX: Go to Railway Dashboard > Flask Service > Variables > Add Reference Secret.")
+        print("❌ ERROR: DATABASE_URL not found in Railway Dashboard!")
         return False
 
-    # 2. Log the connection attempt (Masking the password for security)
-    # This helps us confirm if it's still trying to use the old 'crossover.proxy'
-    connection_host = db_url.split('@')[-1] if '@' in db_url else "Unknown"
-    print(f"🔄 Attempting to connect to: {connection_host}")
-
-    # 3. Standardize the prefix (Required for some Psycopg2/SQLAlchemy versions)
+    # Standardize the prefix
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)
 
     try:
-        # 4. Initialize the Threaded Pool
-        # minconn=1, maxconn=20 allows the app to handle multiple users at once
-        connection_pool = psycopg2.pool.ThreadedConnectionPool(
-            1, 20, dsn=db_url
-        )
-        print("✅ DATABASE CONNECTION SUCCESS: Pool initialized.")
+        # The 'dsn' contains the correct host, port, and password automatically
+        connection_pool = psycopg2.pool.ThreadedConnectionPool(1, 20, dsn=db_url)
+        print("✅ SUCCESS: Connected to Internal Railway Database!")
         return True
     except Exception as e:
-        print(f"❌ DATABASE CONNECTION FAILED: {e}")
-        connection_pool = None
+        print(f"❌ CONNECTION FAILED: {e}")
         return False
 
 def get_db():
