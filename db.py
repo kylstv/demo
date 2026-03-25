@@ -21,7 +21,6 @@ def init_db():
         db_url = db_url.replace("postgres://", "postgresql://", 1)
 
     try:
-        # Initialize connection pool with SSL (REQUIRED for Railway)
         connection_pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=1,
             maxconn=20,
@@ -29,8 +28,10 @@ def init_db():
             sslmode="require",
             connect_timeout=10
         )
-
         print("✅ SUCCESS: Connected to Railway PostgreSQL!")
+
+        # Create all tables on startup
+        create_tables()
         return True
 
     except Exception as e:
@@ -38,10 +39,116 @@ def init_db():
         return False
 
 
+def create_tables():
+    """Creates all tables and default data if they don't exist yet."""
+    conn = None
+    try:
+        conn = connection_pool.getconn()
+        with conn.cursor() as cur:
+
+            # Enable pgcrypto extension
+            cur.execute('CREATE EXTENSION IF NOT EXISTS "pgcrypto";')
+
+            # ── 1. users (no foreign key dependencies)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id            SERIAL PRIMARY KEY,
+                    username      VARCHAR(80)  UNIQUE NOT NULL,
+                    email         VARCHAR(150) UNIQUE NOT NULL,
+                    password      TEXT NOT NULL,
+                    is_admin      BOOLEAN DEFAULT FALSE,
+                    is_verified   BOOLEAN DEFAULT FALSE,
+                    verify_token  TEXT,
+                    reset_token   TEXT,
+                    reset_expires TIMESTAMP,
+                    created_at    TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            print("✅ users ready")
+
+            # ── 2. categories (no foreign key dependencies)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS categories (
+                    id          SERIAL PRIMARY KEY,
+                    name        VARCHAR(100) UNIQUE NOT NULL,
+                    description TEXT,
+                    created_at  TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            print("✅ categories ready")
+
+            # ── 3. products (depends on categories)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS products (
+                    id          SERIAL PRIMARY KEY,
+                    category_id INT REFERENCES categories(id) ON DELETE SET NULL,
+                    name        VARCHAR(200) NOT NULL,
+                    description TEXT,
+                    price       NUMERIC(10,2) NOT NULL,
+                    stock       INT DEFAULT 0,
+                    image_path  TEXT,
+                    tags        TEXT,
+                    created_at  TIMESTAMP DEFAULT NOW(),
+                    updated_at  TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            print("✅ products ready")
+
+            # ── 4. orders (depends on users)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS orders (
+                    id              SERIAL PRIMARY KEY,
+                    user_id         INT REFERENCES users(id) ON DELETE CASCADE,
+                    total_amount    NUMERIC(10,2) NOT NULL,
+                    status          VARCHAR(50) DEFAULT 'pending',
+                    paypal_order_id TEXT,
+                    created_at      TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            print("✅ orders ready")
+
+            # ── 5. order_items (depends on orders + products)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS order_items (
+                    id         SERIAL PRIMARY KEY,
+                    order_id   INT REFERENCES orders(id) ON DELETE CASCADE,
+                    product_id INT REFERENCES products(id) ON DELETE SET NULL,
+                    quantity   INT NOT NULL,
+                    unit_price NUMERIC(10,2) NOT NULL
+                );
+            """)
+            print("✅ order_items ready")
+
+            # ── Default admin account (password: Admin@1234)
+            cur.execute("""
+                INSERT INTO users (username, email, password, is_admin, is_verified)
+                VALUES (
+                    'admin',
+                    'admin@store.com',
+                    '$2b$12$KiWjOEbBvAn1Rm5bE1UiA.tE0qBBW8t3.5vl8Fz7XrQ7oZ3KLQS9e',
+                    TRUE,
+                    TRUE
+                ) ON CONFLICT DO NOTHING;
+            """)
+            print("✅ admin account ready")
+
+        conn.commit()
+        print("✅ All tables created/verified successfully")
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"❌ create_tables FAILED: {e}")
+        raise e
+
+    finally:
+        if conn:
+            connection_pool.putconn(conn)
+
+
 def get_db():
     global connection_pool
 
-    # Initialize pool if not already
     if connection_pool is None:
         success = init_db()
         if not success:
@@ -101,9 +208,7 @@ def query(sql, params=(), fetchone=False, fetchall=False, commit=False):
 
 
 def close_all_connections():
-    """
-    Gracefully close all connections (optional for shutdown).
-    """
+    """Gracefully close all connections on shutdown."""
     global connection_pool
 
     if connection_pool:
