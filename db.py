@@ -1,6 +1,7 @@
 import os
 import psycopg2
 from psycopg2 import pool
+import psycopg2.extras
 
 # Global variable for the pool
 connection_pool = None
@@ -59,6 +60,3 @@ def query(sql, params=(), fetchone=False, fetchall=False, commit=False):
         raise e
     finally:
         release_db(conn)
-
-# Import this at the top to make RealDictCursor work
-import psycopg2.extras
