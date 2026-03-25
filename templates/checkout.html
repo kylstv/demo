@@ -1,23 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Checkout{% endblock %}
-
+{% block head %}
+<script src="https://www.paypal.com/sdk/js?client-id={{ paypal_client_id }}&currency=PHP"></script>
+{% endblock %}
 {% block content %}
 <section class="section">
   <div class="container" style="max-width:860px;">
-
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
-      <h2 class="section-title" style="margin-bottom:0;">Checkout</h2>
-      <span style="
-        background:#f59e0b;color:#fff;font-size:.65rem;font-weight:700;
-        letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;
-        border-radius:4px;vertical-align:middle;
-      ">Demo Mode</span>
-    </div>
-    <p class="section-subtitle">Review your order and simulate a payment.</p>
+    <h2 class="section-title">Checkout</h2>
+    <p class="section-subtitle">Complete your purchase securely via PayPal.</p>
 
     <div style="display:grid;grid-template-columns:1fr 380px;gap:28px;align-items:start;">
 
-      <!-- ── Order Summary ─────────────────────────────────── -->
+      <!-- Order Summary -->
       <div class="checkout-card">
         <h3 style="margin-bottom:20px;font-size:1.1rem;">Order Summary</h3>
         <table class="cart-table">
@@ -29,9 +23,7 @@
             <tr>
               <td>
                 <div style="font-weight:600;">{{ item.name }}</div>
-                <div style="font-size:.78rem;color:var(--gray-500);">
-                  ₱{{ "%.2f"|format(item.price) }} each
-                </div>
+                <div style="font-size:.78rem;color:var(--gray-500);">₱{{ "%.2f"|format(item.price) }} each</div>
               </td>
               <td>{{ item.qty }}</td>
               <td>₱{{ "%.2f"|format(item.subtotal) }}</td>
@@ -45,76 +37,22 @@
         </table>
       </div>
 
-      <!-- ── Payment Panel ──────────────────────────────────── -->
+      <!-- Payment -->
       <div class="checkout-card" style="position:sticky;top:80px;">
         <h3 style="margin-bottom:6px;">Payment</h3>
         <p style="font-size:.85rem;color:var(--gray-500);margin-bottom:20px;">
           You will be charged <strong>₱{{ "%.2f"|format(total) }}</strong>
         </p>
 
-        <!-- Demo notice -->
-        <div style="
-          background:#fef9c3;border:1px solid #fde68a;border-radius:var(--radius);
-          padding:10px 14px;margin-bottom:20px;font-size:.82rem;color:#92400e;
-          display:flex;align-items:flex-start;gap:8px;
-        ">
-          <i class="fas fa-flask" style="margin-top:2px;flex-shrink:0;"></i>
-          <span>
-            <strong>Practice site — no real payment is processed.</strong>
-            Fill in any values and click <em>Pay Now</em> to simulate a successful order.
-          </span>
+        <div style="background:var(--gray-100);border-radius:var(--radius);padding:12px 16px;margin-bottom:20px;font-size:.82rem;color:var(--gray-700);">
+          <i class="fas fa-lock" style="color:var(--success);margin-right:6px;"></i>
+          Secured by PayPal. Your financial information is never stored on our servers.
         </div>
 
-        <!-- Fake card form -->
-        <div id="mock-payment-form">
-          <div style="margin-bottom:14px;">
-            <label class="form-label">Cardholder Name</label>
-            <input id="card-name" class="form-control" type="text"
-                   placeholder="Juan dela Cruz" autocomplete="off">
-          </div>
-
-          <div style="margin-bottom:14px;">
-            <label class="form-label">Card Number</label>
-            <input id="card-number" class="form-control" type="text"
-                   placeholder="4242 4242 4242 4242" maxlength="19"
-                   autocomplete="off" inputmode="numeric">
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
-            <div>
-              <label class="form-label">Expiry</label>
-              <input id="card-expiry" class="form-control" type="text"
-                     placeholder="MM / YY" maxlength="7" autocomplete="off">
-            </div>
-            <div>
-              <label class="form-label">CVC</label>
-              <input id="card-cvc" class="form-control" type="text"
-                     placeholder="123" maxlength="4" autocomplete="off">
-            </div>
-          </div>
-
-          <!-- Simulate failure toggle (handy for testing) -->
-          <div style="margin-bottom:18px;font-size:.82rem;color:var(--gray-500);display:flex;align-items:center;gap:8px;">
-            <input type="checkbox" id="simulate-fail" style="cursor:pointer;">
-            <label for="simulate-fail" style="cursor:pointer;">
-              Simulate payment failure (for testing)
-            </label>
-          </div>
-
-          <button id="pay-btn" onclick="handleMockPayment()" style="
-            width:100%;padding:13px;font-size:.95rem;font-weight:600;
-            background:var(--primary,#2563eb);color:#fff;border:none;
-            border-radius:var(--radius);cursor:pointer;transition:opacity .15s;
-          ">
-            <i class="fas fa-lock" style="margin-right:8px;"></i>
-            Pay ₱{{ "%.2f"|format(total) }}
-          </button>
-        </div>
-
-        <!-- Status message -->
+        <!-- PayPal Button Container -->
+        <div id="paypal-button-container"></div>
         <div id="payment-status" style="display:none;margin-top:16px;"></div>
       </div>
-
     </div>
   </div>
 </section>
@@ -122,99 +60,50 @@
 
 {% block scripts %}
 <script>
-/* ── Card input formatting ───────────────────────────────── */
-document.getElementById('card-number').addEventListener('input', function () {
-  let v = this.value.replace(/\D/g, '').slice(0, 16);
-  this.value = v.replace(/(.{4})/g, '$1 ').trim();
-});
-
-document.getElementById('card-expiry').addEventListener('input', function () {
-  let v = this.value.replace(/\D/g, '').slice(0, 4);
-  if (v.length >= 3) v = v.slice(0, 2) + ' / ' + v.slice(2);
-  this.value = v;
-});
-
-document.getElementById('card-cvc').addEventListener('input', function () {
-  this.value = this.value.replace(/\D/g, '').slice(0, 4);
-});
-
-/* ── Mock payment handler ────────────────────────────────── */
-function handleMockPayment() {
-  const name   = document.getElementById('card-name').value.trim();
-  const number = document.getElementById('card-number').value.replace(/\s/g, '');
-  const expiry = document.getElementById('card-expiry').value.trim();
-  const cvc    = document.getElementById('card-cvc').value.trim();
-  const fail   = document.getElementById('simulate-fail').checked;
-
-  const statusEl = document.getElementById('payment-status');
-  const payBtn   = document.getElementById('pay-btn');
-
-  // Basic front-end validation
-  if (!name || number.length < 13 || expiry.length < 4 || cvc.length < 3) {
-    statusEl.style.display = 'block';
-    statusEl.innerHTML = `
-      <div class="alert alert-danger">
-        <i class="fas fa-exclamation-circle"></i>
-        Please fill in all card details correctly.
-      </div>`;
-    return;
-  }
-
-  // Disable button + show loading
-  payBtn.disabled = true;
-  payBtn.style.opacity = '.6';
-  statusEl.style.display = 'block';
-  statusEl.innerHTML = `
-    <div class="alert alert-info">
-      <i class="fas fa-spinner fa-spin"></i>
-      Processing your payment…
-    </div>`;
-
-  // Simulate network delay (1.6 s)
-  setTimeout(function () {
-    if (fail) {
-      statusEl.innerHTML = `
-        <div class="alert alert-danger">
-          <i class="fas fa-times-circle"></i>
-          Payment declined. (Simulated failure — uncheck the box to succeed.)
-        </div>`;
-      payBtn.disabled = false;
-      payBtn.style.opacity = '1';
-      return;
-    }
-
-    // ── Success path ──────────────────────────────────────
-    statusEl.innerHTML = `
-      <div class="alert alert-success">
-        <i class="fas fa-check-circle"></i>
-        Payment successful! Redirecting…
-      </div>`;
-
-    // POST to your backend to create the order record, then redirect.
-    // The body mirrors what your /checkout/capture route probably expects.
-    fetch('/checkout/capture', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mock: true,
-        orderID: 'MOCK-' + Date.now()   // fake order ID for practice
-      })
-    })
-    .then(r => r.json())
-    .then(res => {
-      if (res.success) {
-        window.location.href = '/order/' + res.order_id + '/success';
-      } else {
-        // Fallback: backend didn't return an order_id → still redirect nicely
-        window.location.href = '/order/success';
-      }
-    })
-    .catch(function () {
-      // If the backend endpoint doesn't exist yet, just go to a generic success page
-      window.location.href = '/order/success';
+paypal.Buttons({
+  style: {
+    layout: 'vertical',
+    color:  'gold',
+    shape:  'rect',
+    label:  'pay'
+  },
+  createOrder: function(data, actions) {
+    return actions.order.create({
+      purchase_units: [{
+        amount: {
+          value: '{{ "%.2f"|format(total) }}',
+          currency_code: 'PHP'
+        }
+      }]
     });
+  },
+  onApprove: function(data, actions) {
+    return actions.order.capture().then(function(details) {
+      const statusEl = document.getElementById('payment-status');
+      statusEl.style.display = 'block';
+      statusEl.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Processing your order…</div>';
 
-  }, 1600);
-}
+      fetch('/checkout/capture', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderID: data.orderID })
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.success) {
+          window.location.href = '/order/' + res.order_id + '/success';
+        } else {
+          statusEl.innerHTML = '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Payment error. Please contact support.</div>';
+        }
+      });
+    });
+  },
+  onError: function(err) {
+    document.getElementById('payment-status').style.display = 'block';
+    document.getElementById('payment-status').innerHTML =
+      '<div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i> Payment failed. Please try again.</div>';
+    console.error(err);
+  }
+}).render('#paypal-button-container');
 </script>
 {% endblock %}
