@@ -8,7 +8,7 @@ connection_pool = None
 def init_db():
     global connection_pool
     # RAILWAY provides DATABASE_URL automatically in production
-    db_url = os.environ.get("DATABASE_URL")
+    db_url = os.environ.get("DB_URL")
 
     if db_url:
         print("✅ Connecting to Remote Railway Database...")
